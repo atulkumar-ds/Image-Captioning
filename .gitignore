@@ -30,3 +30,9 @@ tempCodeRunnerFile.py
 # OS
 .DS_Store
 Thumbs.db
+
+venv/
+.venv/
+.venv-wsl/
+__pycache__/
+*.pyc

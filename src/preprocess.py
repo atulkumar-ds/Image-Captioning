@@ -19,24 +19,3 @@ def clean_caption(caption):
     
     return caption
 
-
-
-# Original Caption
-#         │
-#         ▼
-# Convert to lowercase
-#         │
-#         ▼
-# Remove punctuation
-#         │
-#         ▼
-# Remove numbers
-#         │
-#         ▼
-# Remove extra spaces
-#         │
-#         ▼
-# Remove single-letter words
-#         │
-#         ▼
-# Add <start> and <end>

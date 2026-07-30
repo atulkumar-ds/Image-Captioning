@@ -52,16 +52,4 @@ if __name__ == "__main__":
     for caption in captions_dict[first_image]:
         print(caption)
 
-    # Dataset
-#         │
-#         ▼
-# captions.txt
-#         │
-#         ▼
-# Read Lines
-#         │
-#         ▼
-# Split Image + Caption
-#         │
-#         ▼
-# Dictionary
+ 
