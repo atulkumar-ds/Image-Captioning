@@ -1,4 +1,5 @@
 import tensorflow as tf
+import json
 
 gpus = tf.config.list_physical_devices("GPU")
 
@@ -39,7 +40,7 @@ MODEL_DIR = "models"
 
 MIN_FREQUENCY = 5
 BATCH_SIZE = 64
-EPOCHS = 20
+EPOCHS = 40
 
 EMBEDDING_DIM = 256
 HIDDEN_DIM = 256
@@ -65,7 +66,7 @@ print("Total images with captions:", len(captions_dict))
 
 print("\nSplitting dataset...")
 
-image_names = list(captions_dict.keys())
+image_names = sorted(captions_dict.keys())
 
 random.seed(RANDOM_SEED)
 random.shuffle(image_names)
@@ -187,7 +188,7 @@ checkpoint = ModelCheckpoint(
 
 early_stopping = EarlyStopping(
     monitor="val_loss",
-    patience=5,
+    patience=8,
     restore_best_weights=True,
     mode="min",
     verbose=1
@@ -217,8 +218,29 @@ history = model.fit(
         checkpoint,
         early_stopping,
         reduce_lr
-    ]
+    ],
+    verbose=1
 )
+
+HISTORY_FILE = os.path.join(
+    MODEL_DIR,
+    "history.json"
+)
+
+with open(
+    HISTORY_FILE,
+    "w",
+    encoding="utf-8"
+) as file:
+
+    json.dump(
+        history.history,
+        file,
+        indent=4
+    )
+
+print("\nTraining history saved.")
+print(HISTORY_FILE)
 
 
 # 11. Save final model
