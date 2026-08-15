@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+ai_env/
+
+# Temporary files
+temp/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Large generated CNN features
+V2_Attention/model/v2_features.npy

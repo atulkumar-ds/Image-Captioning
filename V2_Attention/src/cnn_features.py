@@ -1,5 +1,8 @@
 import os
 import numpy as np
+import tensorflow as tf
+
+tf.config.optimizer.set_jit(False)
 
 from keras.preprocessing import image
 from keras.applications.inception_v3 import (
@@ -7,9 +10,9 @@ from keras.applications.inception_v3 import (
     preprocess_input
 )
 
-IMAGE_DIR = "data/images"
-FEATURE_FILE = "data/features/image_features.npy"
+IMAGE_DIR = "../V1_Baseline_CNN_LSTM/data/images"
 
+FEATURE_FILE = "../V2_Attention/model/v2_features.npy"
 cnn_model = InceptionV3(
     weights="imagenet",
     include_top=False
@@ -43,14 +46,65 @@ def extract_feature(image_path, model):
 
     return features
 
-if __name__ == "__main__":
+def load_features(feature_file):
 
-    image_path = "data/images/1000268201_693b08cb0e.jpg"
+    features = np.load(
+        feature_file,
+        allow_pickle=True
+    ).item()
 
-    features = extract_feature(
-        image_path,
-        cnn_model
+    print(
+        f"Loaded {len(features)} image features."
     )
 
-    print("\nFeature Shape:")
-    print(features.shape)
+    return features
+
+def extract_all_features():
+
+    features = {}
+
+    image_names = os.listdir(
+        IMAGE_DIR
+    )
+
+    print(
+        f"Total Images: {len(image_names)}"
+    )
+
+    for index, image_name in enumerate(image_names):
+
+        image_path = os.path.join(
+            IMAGE_DIR,
+            image_name
+        )
+
+        feature = extract_feature(
+            image_path,
+            cnn_model
+        )
+
+        feature = feature.reshape(
+            -1,
+            2048
+        )
+
+        features[image_name] = feature
+
+        if (index + 1) % 500 == 0:
+
+            print(
+                f"Processed {index+1}/{len(image_names)}"
+            )
+
+    np.save(
+        FEATURE_FILE,
+        features
+    )
+
+    print("\nFeatures Saved")
+    print(FEATURE_FILE)
+
+
+if __name__ == "__main__":
+
+    extract_all_features()
