@@ -11,7 +11,8 @@ class CaptionDataGenerator(Sequence):
         word_to_index,
         max_length,
         batch_size=64,
-        shuffle=True
+        shuffle=True,
+        seed=None
     ):
 
         self.captions_dict = captions_dict
@@ -20,6 +21,8 @@ class CaptionDataGenerator(Sequence):
         self.max_length = max_length
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.seed = seed
+        self.rng = np.random.RandomState(seed) if seed is not None else np.random
 
         self.samples = self._build_sample_index()
 
@@ -119,7 +122,7 @@ class CaptionDataGenerator(Sequence):
     def on_epoch_end(self):
 
         if self.shuffle:
-            np.random.shuffle(self.indices)
+            self.rng.shuffle(self.indices)
 
 if __name__ == "__main__":
 

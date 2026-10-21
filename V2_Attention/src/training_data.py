@@ -10,6 +10,8 @@ def build_training_dataset(
     word_to_index,
     max_length,
     batch_size=64,
+    shuffle=True,
+    seed=None,
 ):
 
     def generator():
@@ -19,7 +21,15 @@ def build_training_dataset(
             if image_name not in features_dict:
                 continue
 
-            feature = features_dict[image_name]
+            feature = np.asarray(features_dict[image_name], dtype=np.float32)
+            if feature.shape != (64, 2048):
+                if feature.size == 64 * 2048:
+                    feature = feature.reshape(64, 2048)
+                else:
+                    raise ValueError(
+                        f"Image feature for '{image_name}' has unexpected shape {feature.shape} "
+                        f"(size {feature.size}), expected 64x2048."
+                    )
 
             for caption in image_captions:
 
@@ -28,9 +38,13 @@ def build_training_dataset(
                     word_to_index
                 )
 
+                end_token_id = word_to_index.get("<end>")
+
                 sequence = pad_sequence(
                     sequence,
-                    max_length
+                    max_length,
+                    preserve_end_token=True,
+                    end_token=end_token_id
                 )
 
                 yield (
@@ -52,7 +66,11 @@ def build_training_dataset(
         )
     )
 
-    dataset = dataset.shuffle(256)
+    if shuffle:
+        if seed is not None:
+            dataset = dataset.shuffle(256, seed=seed, reshuffle_each_iteration=True)
+        else:
+            dataset = dataset.shuffle(256)
 
     dataset = dataset.batch(batch_size)
 

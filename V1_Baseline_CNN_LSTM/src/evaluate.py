@@ -1,100 +1,77 @@
 import os
-import random
+import sys
+import argparse
+from pathlib import Path
 
-from keras.models import load_model
+SRC_DIR = Path(__file__).resolve().parent
+V1_ROOT = SRC_DIR.parent
+REPO_ROOT = V1_ROOT.parent
 
-from dataset import (
-    load_captions,
-    clean_all_captions
-)
+# Set working directory to V1_ROOT so legacy dataset.py relative paths resolve
+os.chdir(V1_ROOT)
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-from generate_caption import (
-    load_tokenizer,
-    generate_caption
-)
+from dataset import load_captions, clean_all_captions
+from generate_caption import load_tokenizer, load_caption_model, generate_caption
+from cnn_features import get_cnn_model, extract_feature
 
-from cnn_features import (
-    cnn_model,
-    extract_feature
-)
-
-
-
-MODEL_FILE = "models/best_caption_model.keras"
-TOKENIZER_FILE = "models/tokenizer.json"
-
-IMAGE_DIR = "data/images"
-
-NUMBER_OF_IMAGES = 10
+DEFAULT_MODEL_FILE = V1_ROOT / "models" / "best_caption_model.keras"
+DEFAULT_TOKENIZER_FILE = V1_ROOT / "models" / "tokenizer.json"
+DEFAULT_IMAGE_DIR = V1_ROOT / "data" / "images"
 
 
+def evaluate_sample(
+    image_name=None,
+    model=None,
+    cnn=None,
+    word_to_index=None,
+    index_to_word=None,
+    max_length=None,
+    model_file=None,
+    tokenizer_file=None,
+    image_dir=None
+):
+    """
+    Evaluates and displays captions for a single image sample.
+    """
+    if tokenizer_file is None:
+        tokenizer_file = DEFAULT_TOKENIZER_FILE
+    if model_file is None:
+        model_file = DEFAULT_MODEL_FILE
+    if image_dir is None:
+        image_dir = DEFAULT_IMAGE_DIR
 
-print("Loading model...\n")
+    if word_to_index is None or index_to_word is None or max_length is None:
+        word_to_index, index_to_word, max_length = load_tokenizer(tokenizer_file)
 
-model = load_model(MODEL_FILE)
+    if model is None:
+        model = load_caption_model(
+            model_file=model_file,
+            vocab_size=len(word_to_index),
+            max_length=max_length
+        )
 
-print("Model loaded.")
+    if cnn is None:
+        cnn = get_cnn_model()
 
+    captions_dict = clean_all_captions(load_captions())
 
+    if image_name is None:
+        image_name = "416650559_cd08d3cd96.jpg"
 
-(
-    word_to_index,
-    index_to_word,
-    max_length
-) = load_tokenizer(TOKENIZER_FILE)
+    image_path = Path(image_dir) / image_name
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image not found: {image_path}")
 
-print("Vocabulary size:", len(word_to_index))
-print("Maximum caption length:", max_length)
-
-
-
-print("\nLoading captions...\n")
-
-captions_dict = load_captions()
-captions_dict = clean_all_captions(captions_dict)
-
-print("Images in dataset:", len(captions_dict))
-
-
-
-# image_names = list(captions_dict.keys())
-
-# random.shuffle(image_names)
-
-# selected_images = image_names[:NUMBER_OF_IMAGES]
-image_names = list(captions_dict.keys())
-
-selected_images = [
-    "416650559_cd08d3cd96.jpg"
-]
-
-
-
-print("\n")
-print("=" * 80)
-print("IMAGE CAPTION EVALUATION")
-print("=" * 80)
-
-
-for image_name in selected_images:
-    
-    image_path = os.path.join(
-        IMAGE_DIR,
-        image_name
-    )
-
-    print("\n")
+    print("\n" + "=" * 80)
+    print(f"IMAGE SAMPLE EVALUATION: {image_name}")
     print("=" * 80)
-    print("IMAGE:")
-    print(image_name)
 
-    print("\nExtracting features...")
+    print("\nExtracting CNN feature...")
+    image_feature = extract_feature(str(image_path), cnn)
 
-    image_feature = extract_feature(
-        image_path,
-        cnn_model
-    )
-
+    print("Generating caption...")
     predicted_caption = generate_caption(
         model=model,
         image_feature=image_feature,
@@ -103,15 +80,27 @@ for image_name in selected_images:
         max_length=max_length
     )
 
-    print("\nGROUND TRUTH CAPTIONS:\n")
+    if image_name in captions_dict:
+        print("\nGROUND TRUTH CAPTIONS:")
+        for ref in captions_dict[image_name]:
+            print(" -", ref)
 
-    for caption in captions_dict[image_name]:
-        print("-", caption)
-
-    print("\nPREDICTED CAPTION:\n")
+    print("\nPREDICTED CAPTION:")
     print(predicted_caption)
+    print("=" * 80 + "\n")
 
-    print("=" * 80)
+    return predicted_caption
 
 
-print("\nEvaluation Complete.")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Evaluate single image caption using V1 Baseline.")
+    parser.add_argument("--image", type=str, default="416650559_cd08d3cd96.jpg", help="Image filename")
+    parser.add_argument("--model", type=str, default=str(DEFAULT_MODEL_FILE), help="Model file path")
+    parser.add_argument("--tokenizer", type=str, default=str(DEFAULT_TOKENIZER_FILE), help="Tokenizer path")
+    args = parser.parse_args()
+
+    evaluate_sample(
+        image_name=args.image,
+        model_file=args.model,
+        tokenizer_file=args.tokenizer
+    )

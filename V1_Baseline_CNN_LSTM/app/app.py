@@ -1,17 +1,20 @@
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 import streamlit as st
-from keras.models import load_model
 
-sys.path.append(
-    os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "src"
-    )
-)
+# ======================================================
+# Add src to Python path (anchored to app.py location)
+# ======================================================
+
+APP_DIR = Path(__file__).resolve().parent
+V1_ROOT = APP_DIR.parent
+SRC_DIR = V1_ROOT / "src"
+
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from cnn_features import (
     cnn_model,
@@ -20,12 +23,13 @@ from cnn_features import (
 
 from generate_caption import (
     load_tokenizer,
+    load_caption_model,
     generate_caption
 )
 
 
-MODEL_FILE = "models/best_caption_model.keras"
-TOKENIZER_FILE = "models/tokenizer.json"
+MODEL_FILE = V1_ROOT / "models" / "best_caption_model.keras"
+TOKENIZER_FILE = V1_ROOT / "models" / "tokenizer.json"
 
 
 st.set_page_config(
@@ -35,10 +39,8 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_resources():
-
-    model = load_model(MODEL_FILE)
 
     (
         word_to_index,
@@ -46,6 +48,12 @@ def load_resources():
         max_length
     ) = load_tokenizer(
         TOKENIZER_FILE
+    )
+
+    model = load_caption_model(
+        model_file=MODEL_FILE,
+        vocab_size=len(word_to_index),
+        max_length=max_length
     )
 
     return (
@@ -56,12 +64,48 @@ def load_resources():
     )
 
 
-(
-    model,
-    word_to_index,
-    index_to_word,
-    max_length
-) = load_resources()
+# ======================================================
+# Staged Loading with Error Handling
+# ======================================================
+
+model = None
+word_to_index = None
+index_to_word = None
+max_length = None
+
+try:
+    with st.status("Initializing V1 Baseline Model...", expanded=False) as status:
+        st.write("1/3 Verifying files and tokenizer...")
+        if not TOKENIZER_FILE.exists():
+            raise FileNotFoundError(f"Tokenizer not found: {TOKENIZER_FILE}")
+        if not MODEL_FILE.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {MODEL_FILE}")
+
+        st.write("2/3 Loading InceptionV3 CNN feature extractor...")
+        # cnn_model is loaded via import
+
+        st.write("3/3 Reconstructing V1 model & loading weights...")
+        (
+            model,
+            word_to_index,
+            index_to_word,
+            max_length
+        ) = load_resources()
+
+        status.update(
+            label="✓ V1 Baseline Model ready",
+            state="complete",
+            expanded=False
+        )
+
+except Exception as e:
+    st.error(
+        f"**Model Initialization Failed**\n\n"
+        f"**Error Type:** `{type(e).__name__}`\n\n"
+        f"**Details:** {e}\n\n"
+        f"**V1 Root:** `{V1_ROOT}`"
+    )
+    st.stop()
 
 
 st.title("🖼️ Image Caption Generator")
@@ -113,40 +157,40 @@ if uploaded_image is not None:
 
     if st.button("Generate Caption"):
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".jpg"
-        ) as temp_file:
+        temp_dir = APP_DIR / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
-            temp_file.write(
-                uploaded_image.read()
-            )
+        temp_path = temp_dir / uploaded_image.name
 
-            temp_path = temp_file.name
+        try:
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_image.read())
 
-        with st.spinner(
-            "Generating caption..."
-        ):
+            with st.spinner("Generating caption..."):
+                image_feature = extract_feature(
+                    str(temp_path),
+                    cnn_model
+                )
 
-            image_feature = extract_feature(
-                temp_path,
-                cnn_model
-            )
+                caption = generate_caption(
+                    model=model,
+                    image_feature=image_feature,
+                    word_to_index=word_to_index,
+                    index_to_word=index_to_word,
+                    max_length=max_length
+                )
 
-            caption = generate_caption(
-                model=model,
-                image_feature=image_feature,
-                word_to_index=word_to_index,
-                index_to_word=index_to_word,
-                max_length=max_length
-            )
+            st.success("Caption Generated Successfully!")
+            st.subheader("Generated Caption")
+            st.write(f"**{caption}**")
+            st.balloons()
 
-        os.remove(temp_path)
+        except Exception as e:
+            st.error(f"Error during caption generation: {e}")
 
-        st.success("Caption Generated Successfully!")
-
-        st.subheader("Generated Caption")
-
-        st.write(f"**{caption}**")
-
-        st.balloons()
+        finally:
+            if temp_path.exists():
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass

@@ -17,8 +17,6 @@ def train_step(
     cell
 ):
 
-    total_loss = 0.0
-
     with tf.GradientTape() as tape:
 
         predictions = model(
@@ -30,22 +28,14 @@ def train_step(
 
         target = captions[:, 1:]
 
-        sequence_length = captions.shape[1] - 1
-
-        for t in range(sequence_length):
-
-            total_loss += loss_function(
-                target[:, t],
-                predictions[:, t]
-            )
-
-        average_loss = total_loss / tf.cast(
-            sequence_length,
-            tf.float32
+        # Token-normalized masked loss across entire batch
+        loss = loss_function(
+            target,
+            predictions
         )
 
     gradients = tape.gradient(
-        average_loss,
+        loss,
         model.trainable_variables
     )
 
@@ -56,4 +46,4 @@ def train_step(
         )
     )
 
-    return average_loss
+    return loss

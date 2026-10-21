@@ -1,26 +1,51 @@
 import json
+from pathlib import Path
 import numpy as np
-from keras.models import load_model
+
 from keras.preprocessing.sequence import pad_sequences
 
-from cnn_features import (
-    cnn_model,
-    extract_feature
-)
+try:
+    from V1_Baseline_CNN_LSTM.src.cnn_features import (
+        cnn_model,
+        extract_feature
+    )
+    from V1_Baseline_CNN_LSTM.src.model import build_caption_model
+except ImportError:
+    from cnn_features import (
+        cnn_model,
+        extract_feature
+    )
+    from model import build_caption_model
 
 
-# Paths
+# ======================================================
+# Paths & Absolute Resolution
+# ======================================================
 
-MODEL_FILE = "models/best_caption_model.keras"
-TOKENIZER_FILE = "models/tokenizer.json"
+SRC_DIR = Path(__file__).resolve().parent
+V1_ROOT = SRC_DIR.parent
+
+DEFAULT_MODEL_FILE = V1_ROOT / "models" / "best_caption_model.keras"
+DEFAULT_TOKENIZER_FILE = V1_ROOT / "models" / "tokenizer.json"
 
 
-# Load tokenizer
+# ======================================================
+# Load Tokenizer
+# ======================================================
 
-def load_tokenizer(file_path):
+def load_tokenizer(file_path=None):
+
+    if file_path is None:
+        file_path = DEFAULT_TOKENIZER_FILE
+
+    tokenizer_path = Path(file_path).resolve()
+    if not tokenizer_path.exists():
+        raise FileNotFoundError(
+            f"Tokenizer file not found: {tokenizer_path}"
+        )
 
     with open(
-        file_path,
+        tokenizer_path,
         "r",
         encoding="utf-8"
     ) as file:
@@ -46,7 +71,47 @@ def load_tokenizer(file_path):
     )
 
 
-# Generate caption
+# ======================================================
+# Load Caption Model (Reconstruct + Load Weights)
+# ======================================================
+
+def load_caption_model(
+    model_file=None,
+    vocab_size=2814,
+    max_length=34
+):
+
+    if model_file is None:
+        model_file = DEFAULT_MODEL_FILE
+
+    model_path = Path(model_file).resolve()
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"Model checkpoint not found: {model_path}"
+        )
+
+    # Reconstruct exact V1 architecture and load weights
+    # to circumvent Keras whole-model deserialization config drift
+    model = build_caption_model(
+        vocab_size=vocab_size,
+        max_length=max_length,
+        feature_size=2048,
+        embedding_dim=256,
+        hidden_dim=256
+    )
+
+    model.load_weights(str(model_path))
+
+    assert model.output_shape[-1] == vocab_size, (
+        f"Output vocabulary size mismatch: {model.output_shape[-1]} != {vocab_size}"
+    )
+
+    return model
+
+
+# ======================================================
+# Generate Caption
+# ======================================================
 
 def generate_caption(
     model,
@@ -59,11 +124,9 @@ def generate_caption(
     # Start generation with <start>
     generated_words = ["<start>"]
 
-
     for _ in range(max_length):
 
         # Convert words -> indices
-
         sequence = [
             word_to_index.get(
                 word,
@@ -72,44 +135,35 @@ def generate_caption(
             for word in generated_words
         ]
 
-
         # Pad sequence
-
         sequence = pad_sequences(
             [sequence],
             maxlen=max_length,
             padding="post"
         )
 
-
-        # Predict next word
-
-        predictions = model.predict(
+        # Direct model invocation with training=False avoids repeated model.predict() overhead
+        predictions = model(
             [
                 image_feature.reshape(1, -1),
                 sequence
             ],
-            verbose=0
-        )
-
+            training=False
+        ).numpy()
 
         # Word with highest probability
         predicted_index = np.argmax(
             predictions[0]
         )
 
-
         predicted_word = index_to_word.get(
             predicted_index,
             "<unk>"
         )
 
-
         # Stop if model predicts <end>
-
         if predicted_word == "<end>":
             break
-
 
         # Safety: don't generate padding/start tokens
         if predicted_word in {
@@ -118,11 +172,9 @@ def generate_caption(
         }:
             break
 
-
         generated_words.append(
             predicted_word
         )
-
 
     # Remove <start>
     caption_words = generated_words[1:]
@@ -130,18 +182,11 @@ def generate_caption(
     return " ".join(caption_words)
 
 
+# ======================================================
 # Main
+# ======================================================
 
 if __name__ == "__main__":
-
-    print("\nLoading caption model...")
-
-    model = load_model(
-        MODEL_FILE
-    )
-
-    print("Model loaded successfully.")
-
 
     print("\nLoading tokenizer...")
 
@@ -150,29 +195,34 @@ if __name__ == "__main__":
         index_to_word,
         max_length
     ) = load_tokenizer(
-        TOKENIZER_FILE
+        DEFAULT_TOKENIZER_FILE
     )
 
     print("Tokenizer loaded successfully.")
-
     print("Vocabulary size:", len(word_to_index))
     print("Maximum length:", max_length)
 
+    print("\nLoading caption model...")
+
+    model = load_caption_model(
+        model_file=DEFAULT_MODEL_FILE,
+        vocab_size=len(word_to_index),
+        max_length=max_length
+    )
+
+    print("Model loaded successfully.")
 
     # IMAGE TO TEST
-
-    image_path = "data/images/1000268201_693b08cb0e.jpg"
+    image_path = V1_ROOT / "data" / "images" / "1000268201_693b08cb0e.jpg"
 
     print("\nImage:")
     print(image_path)
 
-
     # Extract CNN feature
-
     print("\nExtracting image features...")
 
     image_feature = extract_feature(
-        image_path,
+        str(image_path),
         cnn_model
     )
 
@@ -181,9 +231,7 @@ if __name__ == "__main__":
         image_feature.shape
     )
 
-
     # Generate caption
-
     print("\nGenerating caption...")
 
     caption = generate_caption(
@@ -194,9 +242,7 @@ if __name__ == "__main__":
         max_length=max_length
     )
 
-
     print("\n==============================")
     print("GENERATED CAPTION")
     print("==============================")
-
     print(caption)

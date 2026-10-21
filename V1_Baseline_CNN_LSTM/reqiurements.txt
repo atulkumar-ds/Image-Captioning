@@ -1,0 +1,20 @@
+# Historical typo alias for requirements.txt
+# Deep Learning Framework
+# Verified working combination in active project environment: TensorFlow 2.21.0 with Keras 3.14.1.
+# Compatibility Note: Keras 3.x requires TensorFlow >= 2.16.0 when using the TensorFlow backend.
+# Earlier TensorFlow releases (< 2.16) bundled Keras 2.x (tf.keras) and are incompatible with Keras >= 3.0.0.
+# Platform Note: Native Windows builds of TensorFlow >= 2.11 operate on CPU only.
+# GPU-accelerated training requires WSL2 (Ubuntu) with NVIDIA Container Toolkit / CUDA.
+tensorflow>=2.16.0
+keras>=3.0.0
+
+# Scientific Computing & Image Processing
+numpy>=1.23.0
+pillow>=9.0.0
+
+# Evaluation & Metrics
+nltk>=3.7
+
+# Visualization & Interactive App
+matplotlib>=3.5.0
+streamlit>=1.20.0

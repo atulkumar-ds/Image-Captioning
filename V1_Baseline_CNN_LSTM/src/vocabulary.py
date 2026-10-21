@@ -1,5 +1,4 @@
 from collections import Counter
-from dataset import load_captions, clean_all_captions
 
 
 def build_vocabulary(caption_dict):
@@ -7,17 +6,18 @@ def build_vocabulary(caption_dict):
 
     for image_name in caption_dict:
         for caption in caption_dict[image_name]:
-            words=caption.split()
+            words = caption.split()
             all_words.extend(words)
 
-    words_count=Counter(all_words)
+    words_count = Counter(all_words)
 
     return words_count
 
+
 if __name__ == "__main__":
+    from dataset import load_captions, clean_all_captions
 
     captions_dict = load_captions()
-
     captions_dict = clean_all_captions(captions_dict)
 
     word_counts = build_vocabulary(captions_dict)

@@ -4,255 +4,193 @@
 
 Version 1 is a baseline image captioning system built using a **pretrained InceptionV3 CNN** as the image encoder and an **LSTM decoder** for caption generation.
 
-The objective of this project is to learn and implement the complete image captioning pipeline from scratch, including data preprocessing, feature extraction, model training, caption generation, and evaluation.
+The objective of this project is to implement and benchmark an end-to-end image captioning pipeline, including data preprocessing, feature extraction, model training, greedy caption generation, and BLEU score evaluation.
 
 ---
 
 ## 🚀 Features
 
-- Image feature extraction using **InceptionV3**
-- Caption preprocessing and cleaning
-- Vocabulary creation
-- Custom tokenizer
-- Training sample generation
-- Custom Keras Data Generator
-- CNN + LSTM encoder-decoder architecture
+- Image feature extraction using **InceptionV3** (global 2048-D feature vector)
+- Caption preprocessing with preservation of single-letter words (`a`, `i`)
+- Frequency-filtered vocabulary creation
+- Custom JSON-serialized tokenizer
+- Custom Keras Data Generator with batch padding
+- CNN + LSTM encoder-decoder fusion architecture
 - Caption generation using Greedy Search
-- BLEU Score evaluation
-- Training history visualization
-- Modular project structure
+- Leak-aware corpus BLEU score evaluation (BLEU-1 to BLEU-4)
+- Training history visualization utility
+- Interactive Streamlit demonstration app
 
 ---
 
 # 🏗 Architecture
 
 ```
-                Image
-                  │
-          InceptionV3
-                  │
-      2048-D Feature Vector
-                  │
-               Dense
-                  │
-                  ├──────────────┐
-                  │              │
-Caption → Embedding → LSTM ──────┘
-                  │
-                Add
-                  │
-               Dense
-                  │
-             Softmax Layer
-                  │
-            Predicted Word
+                Image (299 x 299 x 3)
+                          │
+                     InceptionV3
+                          │
+                2048-D Feature Vector
+                          │
+                    Dropout (0.5)
+                          │
+                     Dense (256)
+                          │
+                          ├──────────────┐
+                          │              │
+Caption → Embedding → Dropout (0.5) → LSTM (256)
+                          │              │
+                          └──────┬───────┘
+                                 │
+                               Add()
+                          │
+                     Dense (256)
+                          │
+                    Softmax Layer
+                          │
+                    Predicted Word
 ```
 
 ---
 
-# 📂 Dataset
+# 📂 Dataset & Splits
 
-**Dataset:** Flickr8k
-
-- ~8,000 images
-- 5 captions per image
-- Total captions: ~40,000
-
-Each image is paired with multiple human-written captions.
+- **Dataset:** Flickr8k (~8,000 images, 5 captions per image).
+- **Canonical Split (`splits.json`):**
+  - **Train:** 5,663 images (70%)
+  - **Validation:** 1,213 images (15%)
+  - **Test:** 1,215 images (15%)
+  - Image-level partition guaranteeing zero caption leakage across splits.
+- **Historical Split:** 90% train / 10% validation split historically used for `best_caption_model.keras`.
 
 ---
 
 # 🛠 Tech Stack
 
 - Python
-- TensorFlow / Keras
+- TensorFlow / Keras (>= 2.10.0)
 - NumPy
 - Matplotlib
-- NLTK
-- InceptionV3 (ImageNet pretrained)
+- NLTK (for corpus BLEU with brevity penalty and smoothing)
+- Streamlit
 
 ---
 
 # 📁 Project Structure
 
-```
-V1_Baseline_CNN_LSTM
-│
+```text
+V1_Baseline_CNN_LSTM/
 ├── app/
+│   └── app.py                  # Streamlit web application
 ├── data/
-│   ├── captions/
-│   ├── images/
-│   └── features/
-│
+│   ├── captions/captions.txt   # Raw Flickr8k captions
+│   ├── images/                 # Image files
+│   └── features/               # Extracted 2048-D feature vectors (.npz)
 ├── models/
-│
-├── notebooks/
-│
-├── plots/
-│
+│   ├── best_caption_model.keras # Historical trained baseline checkpoint
+│   ├── tokenizer.json          # Historical vocabulary tokenizer (2,814 tokens)
+│   └── history.json            # Historical training metrics log
+├── plots/                      # Training loss and accuracy plots
 ├── src/
-│   ├── cnn_features.py
-│   ├── dataset.py
-│   ├── vocabulary.py
-│   ├── tokenizer.py
-│   ├── sequences.py
-│   ├── data_generator.py
-│   ├── model.py
-│   ├── train.py
-│   ├── generate_caption.py
-│   ├── evaluate.py
-│   ├── bleu_score.py
-│   └── plot_history.py
-│
-├── README.md
-└── requirements.txt
+│   ├── bleu_score.py           # Corpus BLEU evaluation with split verification
+│   ├── cnn_features.py         # Lazy InceptionV3 feature extraction
+│   ├── dataset.py              # Raw caption loading and cleaning
+│   ├── data_generator.py       # Keras sequence data generator
+│   ├── evaluate.py             # Single-sample prediction evaluation
+│   ├── generate_caption.py     # Greedy decoding and inference pipeline
+│   ├── model.py                # Keras Functional API model definition
+│   ├── plot_history.py         # Loss and accuracy curve generator
+│   ├── preprocess.py           # Text normalization routines
+│   ├── sequences.py            # Sequence padding and truncation
+│   ├── tokenizer.py            # Tokenizer construction
+│   ├── train.py                # Baseline training pipeline
+│   └── vocabulary.py           # Vocabulary builder
+├── requirements.txt            # Package dependencies
+└── README.md
 ```
 
 ---
 
-# ⚙ Pipeline
+## 🛠️ Usage Instructions
 
-## 1. Data Preprocessing
+### 1. Training, Reproducibility, and Dry-Run Verification
 
-- Load Flickr8k captions
-- Clean text
-- Remove punctuation
-- Convert to lowercase
-- Add `<start>` and `<end>` tokens
+The training script supports deterministic seeding, experiment tracking, atomic history logging, and non-mutating dry-run verification:
 
----
+- **Reproducibility Seeding (`--seed`, default: 42):** Sets seeds for Python `random`, `numpy.random`, and `tensorflow`. Controls layer initialization, dropout masks, and generator batch shuffling.
+  > [!NOTE]
+  > *Limits of Reproducibility:* Algorithmic seeds guarantee repeatable pseudorandom sequences across Python, NumPy, and TensorFlow. However, exact bit-for-bit numerical outputs across different GPUs, CUDA/cuDNN driver versions, or multithreaded CPU instruction schedules (e.g., parallel reductions in oneDNN) are subject to floating-point rounding nondeterminism. Split membership is strictly invariant to seed values and is read directly from `splits.json`. Validation evaluation is deterministic as `val_generator` sets `shuffle=False`.
+- **Atomic History Persistence:** `history.json` is safely updated after every completed epoch using atomic temporary files (`.tmp` + `os.replace`), preventing corrupted JSON if execution is interrupted.
+- **Synchronized Checkpoint Tracking:** The best checkpoint is chosen by minimizing `val_loss`. When a new minimum is achieved, its SHA-256 fingerprint, epoch number, and validation loss are atomically written into `config.json`.
+- **Experiment Protection (`--allow_overwrite_experiment`):** Prevents accidental overwrites of existing completed experiments.
 
-## 2. Vocabulary Creation
+```bash
+# Non-mutating validation-only dry-run (validates splits, vocabulary, and paths without training or modifying files):
+python V1_Baseline_CNN_LSTM/src/train.py --dry_run
 
-- Count word frequencies
-- Remove rare words
-- Create:
-  - `word_to_index`
-  - `index_to_word`
-
----
-
-## 3. Image Feature Extraction
-
-Encoder:
-
-**InceptionV3**
-
-- ImageNet pretrained
-- Top layer removed
-- Global Average Pooling
-- Output Feature Size:
-
-```
-2048
+# Retrain V1 on the leak-free canonical split with deterministic seed:
+python V1_Baseline_CNN_LSTM/src/train.py \
+    --split canonical \
+    --output_dir V1_Baseline_CNN_LSTM/experiments/v1_canonical \
+    --seed 42 \
+    --epochs 40 \
+    --batch_size 64
 ```
 
-Extracted features are stored as:
+### 2. Evaluating on Held-Out Splits (Corpus BLEU)
+Evaluate on unseen images using corpus BLEU-1 through BLEU-4 via `bleu_score.py`:
 
-```
-image_features.npz
-```
+> [!IMPORTANT]
+> **Data Leakage Notice:** Historical checkpoint `best_caption_model.keras` was trained on `historical_v1_split["train"]`, which contains 405 images that are in `canonical_split["test"]`. Therefore, evaluating the historical model on `canonical_test` constitutes data leakage. Historical models must ONLY be evaluated on their matching historical validation split (`historical_v1_val`). Canonical test evaluation is reserved exclusively for newly trained canonical models.
 
-to avoid repeated CNN computation.
+```bash
+# Evaluate historical checkpoint on historical validation split (Valid):
+python V1_Baseline_CNN_LSTM/src/bleu_score.py --split historical_v1_val
 
----
-
-## 4. Training Sample Generation
-
-Each caption is converted into multiple training examples.
-
-Example:
-
-Caption:
-
-```
-<start> a dog is running <end>
+# Evaluate a newly retrained canonical model on the canonical test split:
+python V1_Baseline_CNN_LSTM/src/bleu_score.py \
+    --split canonical_test \
+    --trained_on canonical \
+    --model V1_Baseline_CNN_LSTM/experiments/v1_canonical/models/best_caption_model.keras \
+    --tokenizer V1_Baseline_CNN_LSTM/experiments/v1_canonical/models/tokenizer.json
 ```
 
-Training pairs:
+### 3. Evaluating a Single Sample (Inference)
+> [!NOTE]
+> `evaluate.py` performs qualitative inference for a single image, contrasting with the corpus-level statistical benchmarking in `bleu_score.py`.
 
+```bash
+# Run single-image evaluation with working defaults (uses default models/best_caption_model.keras):
+python V1_Baseline_CNN_LSTM/src/evaluate.py --image 1000268201_693b08cb0e.jpg
+
+# Or explicitly specify model and tokenizer (e.g., from a retrained canonical experiment):
+python V1_Baseline_CNN_LSTM/src/evaluate.py \
+    --image 1000268201_693b08cb0e.jpg \
+    --model V1_Baseline_CNN_LSTM/experiments/v1_canonical/models/best_caption_model.keras \
+    --tokenizer V1_Baseline_CNN_LSTM/experiments/v1_canonical/models/tokenizer.json
+
+# Or run the greedy caption inference test script directly:
+python V1_Baseline_CNN_LSTM/src/generate_caption.py
 ```
-<start>                → a
 
-<start> a              → dog
-
-<start> a dog          → is
-
-<start> a dog is       → running
-
-<start> a dog is running → <end>
+### 4. Plotting Training Curves
+```bash
+python V1_Baseline_CNN_LSTM/src/plot_history.py \
+    --history V1_Baseline_CNN_LSTM/models/history.json \
+    --output_dir V1_Baseline_CNN_LSTM/plots
 ```
 
----
-
-## 5. Model
-
-### Image Branch
-
-- Input (2048)
-- Dropout
-- Dense (256)
-
----
-
-### Caption Branch
-
-- Embedding
-- Dropout
-- LSTM (256)
-
----
-
-### Fusion
-
-Image features and caption representation are combined using:
-
-```
-Add()
+### 5. Running the Streamlit App
+```bash
+streamlit run V1_Baseline_CNN_LSTM/app/app.py
 ```
 
 ---
 
-### Output
+# 📊 Results (Historical Checkpoint)
 
-Dense layer with Softmax activation predicts the next word.
-
----
-
-# 📈 Training
-
-Optimizer
-
-- Adam
-
-Loss Function
-
-- Sparse Categorical Crossentropy
-
-Callbacks
-
-- ModelCheckpoint
-- EarlyStopping
-- ReduceLROnPlateau
-
----
-
-# 📊 Results
-
-## Training Accuracy
-
-≈ **38%**
-
-Validation Accuracy
-
-≈ **34%**
-
----
-
-## BLEU Scores
-
-| Metric | Score |
-|---------|------:|
+| Metric | Historical Held-Out Score |
+|:-------|:--------------------------|
 | BLEU-1 | **0.4830** |
 | BLEU-2 | **0.2961** |
 | BLEU-3 | **0.1774** |
@@ -260,60 +198,16 @@ Validation Accuracy
 
 ---
 
-# 📷 Sample Prediction
+# ⚖️ Fair Model Comparison Protocol
 
-Ground Truth
-
-```
-<start> man dressed in batman costume <end>
-```
-
-Predicted
-
-```
-man in blue shirt and white hat is sitting on the sidewalk
-```
-
-This demonstrates that the baseline model learns general sentence structures but often misses fine-grained visual details.
+- **Target and Loss Semantics:** V1 generates prefix-target pairs where the supervised target is a single valid caption token ($w_i \in \{1, \dots, V-1\}$). Zero-padding tokens appear only in the input prefix and are masked via `Embedding(mask_zero=True)`. Supervised targets in V1 **never** include `<pad>`, so padding tokens do not pull down V1 loss. Both V1 and V2 optimize cross-entropy exclusively across valid, non-padding tokens.
+- **Why Evaluation Requires Held-Out Corpus BLEU:** Cross-entropy measures single-step predictive probability under teacher forcing with ground-truth prefixes. At test time, captions are generated greedily without ground truth, where prediction errors compound. Therefore, model architecture quality must be benchmarked using Corpus BLEU (BLEU-1 through BLEU-4) on the mutually held-out `canonical_split["test"]` partition after training on `canonical_split["train"]`.
 
 ---
 
-# ⚠ Limitations
+# ⚠️ Baseline Limitations
 
-- Uses a single global image feature vector.
-- Cannot focus on different regions of an image.
-- Greedy decoding may produce suboptimal captions.
-- BLEU-4 score remains relatively low.
-
----
-
-# 🚀 Future Improvements (Version 2)
-
-The next version will introduce:
-
-- Bahdanau Attention
-- Spatial image features
-- Better caption quality
-- Improved BLEU scores
-
-Repository Progress:
-
-```
-✅ V1 - CNN + LSTM Baseline
-🚧 V2 - Attention Mechanism
-⏳ V3 - Beam Search
-⏳ V4 - Transformer
-⏳ V5 - BLIP
-```
-
----
-
-# 👨‍💻 Author
-
-**Atul Kumar**
-
-B.Tech – Artificial Intelligence & Data Science
-
-IIITDM Kurnool
-
-GitHub: https://github.com/atulkumar-ds
+- **Global Context Bottleneck:** Compress the entire image into a single 2048-D vector, discarding fine-grained spatial information.
+- **No Alignment:** Cannot focus on specific image objects or regions while producing specific words.
+- **Greedy Decoding:** Sensitive to local early token errors without beam search recovery.
+- *Addressed in V2 through Bahdanau spatial attention.*
