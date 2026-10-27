@@ -20,6 +20,7 @@ A modular, reproducible deep learning project investigating the progression of i
 
 ```text
 Image-Captioning/
+├── comparison_app.py           # CaptionLab unified side-by-side comparison web app
 ├── requirements.txt            # Unified project dependency specification
 ├── splits.json                 # Canonical 70/15/15 & historical split manifests
 ├── README.md                   # Project overview and quickstart guide
@@ -196,13 +197,22 @@ python V2_Attention/src/generate_caption.py
 ```
 
 ### 6. Interactive Web Applications
-Launch the interactive captioning interfaces:
-```bash
-# V1 Baseline Web App:
-streamlit run V1_Baseline_CNN_LSTM/app/app.py
 
-# V2 Attention Web App:
-streamlit run V2_Attention/app.py
+#### A. CaptionLab — Unified Side-by-Side Model Comparison (Recommended)
+Launch the unified comparison web application to evaluate both V1 Baseline and V2 Attention models simultaneously on any uploaded image:
+```powershell
+python -m streamlit run comparison_app.py
+```
+*Features: Dual-model real-time inference, monotonic latency benchmarks, token alignment & vocabulary similarity analysis, copy-to-clipboard, and JSON/TXT report exports.*
+
+#### B. Standalone Version 1 Web Application (Baseline CNN + LSTM)
+```powershell
+streamlit run V1_Baseline_CNN_LSTM/app/app.py --server.port 8502
+```
+
+#### C. Standalone Version 2 Web Application (Spatial Attention)
+```powershell
+streamlit run V2_Attention/app.py --server.port 8503
 ```
 
 ---

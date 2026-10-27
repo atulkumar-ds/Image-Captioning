@@ -25,8 +25,13 @@ except ImportError:
 SRC_DIR = Path(__file__).resolve().parent
 V1_ROOT = SRC_DIR.parent
 
-DEFAULT_MODEL_FILE = V1_ROOT / "models" / "best_caption_model.keras"
-DEFAULT_TOKENIZER_FILE = V1_ROOT / "models" / "tokenizer.json"
+_EXP_MODEL_FILE = V1_ROOT / "experiments" / "v1_gpu_retrain_20261027" / "models" / "best_caption_model.keras"
+_EXP_TOKENIZER_FILE = V1_ROOT / "experiments" / "v1_gpu_retrain_20261027" / "models" / "tokenizer.json"
+_LEGACY_MODEL_FILE = V1_ROOT / "models" / "best_caption_model.keras"
+_LEGACY_TOKENIZER_FILE = V1_ROOT / "models" / "tokenizer.json"
+
+DEFAULT_MODEL_FILE = _EXP_MODEL_FILE if _EXP_MODEL_FILE.exists() else _LEGACY_MODEL_FILE
+DEFAULT_TOKENIZER_FILE = _EXP_TOKENIZER_FILE if _EXP_TOKENIZER_FILE.exists() else _LEGACY_TOKENIZER_FILE
 
 
 # ======================================================

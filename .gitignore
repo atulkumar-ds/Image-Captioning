@@ -8,6 +8,9 @@ ai_env/
 
 # Temporary files
 temp/
+**/temp/
+*.tmp
+test_sample.jpg
 
 # Jupyter
 .ipynb_checkpoints/

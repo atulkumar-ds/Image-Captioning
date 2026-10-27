@@ -22,8 +22,13 @@ except ImportError:
 SRC_DIR = Path(__file__).resolve().parent
 V2_ROOT = SRC_DIR.parent
 
-DEFAULT_TOKENIZER_FILE = V2_ROOT / "models" / "tokenizer.json"
-DEFAULT_WEIGHTS_FILE = V2_ROOT / "models" / "v2_attention.weights.h5"
+_EXP_TOKENIZER_FILE = V2_ROOT / "experiments" / "v2_attention_gpu_retrain_20261027" / "models" / "tokenizer.json"
+_EXP_WEIGHTS_FILE = V2_ROOT / "experiments" / "v2_attention_gpu_retrain_20261027" / "models" / "v2_attention.weights.h5"
+_LEGACY_TOKENIZER_FILE = V2_ROOT / "models" / "tokenizer.json"
+_LEGACY_WEIGHTS_FILE = V2_ROOT / "models" / "v2_attention.weights.h5"
+
+DEFAULT_TOKENIZER_FILE = _EXP_TOKENIZER_FILE if _EXP_TOKENIZER_FILE.exists() else _LEGACY_TOKENIZER_FILE
+DEFAULT_WEIGHTS_FILE = _EXP_WEIGHTS_FILE if _EXP_WEIGHTS_FILE.exists() else _LEGACY_WEIGHTS_FILE
 
 EMBEDDING_DIM = 256
 UNITS = 256
