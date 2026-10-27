@@ -17,3 +17,20 @@ temp/
 
 # Large generated CNN features
 V2_Attention/model/v2_features.npy
+# Python environments
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+
+# Datasets and generated feature caches
+MFNet_dataset/
+V1_Baseline_CNN_LSTM/data/
+V2_Attention/model/v2_features.npy
+V2_Attention/experiments/**/v2_features.npy
+V1_Baseline_CNN_LSTM/data/features/
+
+# Local secrets
+.env
+.env.*
+!.env.example

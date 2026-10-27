@@ -1,0 +1,43 @@
+{
+    "model_version": "V1_Baseline_CNN_LSTM",
+    "split_type": "canonical",
+    "split_manifest": "../../../splits.json",
+    "train_split_fingerprint": "a053ea03e2cf2a52fb98de994681351382b85202a61bb5e4a6b021494a8ec83f",
+    "val_split_fingerprint": "e6aa5811c84986f5bffb5898aca502d8a8cb5980f63d540866414d720abef9fe",
+    "test_split_fingerprint": "b49bbae674e1d8225a9fd780fc711be94b08c6901315e4a9cc2865381520dfea",
+    "split_manifest_fingerprint": "52639606869c22880657c2ea2def84f72a6b36d821ff8a14e60a38edbae30039",
+    "train_images": 5663,
+    "val_images": 1213,
+    "test_images": 1215,
+    "seed": 42,
+    "checkpoint_file": "models/best_caption_model.keras",
+    "checkpoint_fingerprint": "c6a5f02d74a6b6bf0e7e52216434b23726cb1c99368b348261c926df65aae16b",
+    "tokenizer_file": "models/tokenizer.json",
+    "tokenizer_fingerprint": "d6811599e4c74635861f521bad2ce3174050e2356c1f557ed8ccf2922d84bb1e",
+    "vocab_size": 2499,
+    "max_length": 37,
+    "batch_size": 64,
+    "epochs": 40,
+    "completed_epochs": 11,
+    "best_val_loss": 2.955871343612671,
+    "embedding_dim": 256,
+    "hidden_dim": 256,
+    "min_frequency": 5,
+    "architecture": {
+        "embedding_dim": 256,
+        "hidden_dim": 256,
+        "min_frequency": 5
+    },
+    "loss_objective": "sparse_categorical_crossentropy",
+    "best_checkpoint_criterion": {
+        "metric": "val_loss",
+        "mode": "min"
+    },
+    "history_file": "history.json",
+    "special_tokens": {
+        "start_token": "<start>",
+        "end_token": "<end>",
+        "pad_token": "<pad>",
+        "unk_token": "<unk>"
+    }
+}

@@ -1,0 +1,10 @@
+V2 Attention — Canonical Held-Out Test Evaluation
+
+Split: canonical_test
+Images evaluated: 1215
+Checkpoint: experiments/v2_attention_gpu_retrain_20261027/models/v2_attention.weights.h5
+
+BLEU-1: 0.5378
+BLEU-2: 0.3646
+BLEU-3: 0.2368
+BLEU-4: 0.1526
