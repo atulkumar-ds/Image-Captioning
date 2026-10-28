@@ -37,3 +37,4 @@ V1_Baseline_CNN_LSTM/data/features/
 .env
 .env.*
 !.env.example
+V3_BLIP_PyTorch/data/my_photo.jpg

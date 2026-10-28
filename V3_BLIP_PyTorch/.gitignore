@@ -1,0 +1,45 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Model checkpoints and weights
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+pytorch_model.bin
+
+# Datasets
+data/flickr30k/
+data/Flickr30k/
+data/images/
+data/*.zip
+MFNet_dataset/
+
+# Training outputs and caches
+results/training/
+results/evaluation/
+results/baseline/
+.cache/
+huggingface_cache/
+wandb/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+!.env.example
