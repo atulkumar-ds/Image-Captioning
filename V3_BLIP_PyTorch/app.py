@@ -1,8 +1,9 @@
 
-"""Streamlit application for the Flickr30k fine-tuned BLIP model."""
+"""Image Captioning V3 - BLIP fine-tuned on Flickr30k."""
 
 import hashlib
 import io
+import os
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -14,7 +15,9 @@ from transformers import BlipForConditionalGeneration, BlipProcessor
 
 
 ROOT = Path(__file__).resolve().parent
-MODEL_DIR = ROOT / "checkpoints" / "flickr30k_blip"
+LOCAL_MODEL_DIR = ROOT / "checkpoints" / "flickr30k_blip"
+
+HF_MODEL_ID = "Atul0/flickr30k-blip-captioning-v3"
 
 st.set_page_config(
     page_title="Image Captioning V3",
@@ -24,21 +27,36 @@ st.set_page_config(
 )
 
 
+def get_hf_token():
+    """Read the Hugging Face token from Streamlit secrets or environment."""
+    token = os.getenv("HF_TOKEN")
+
+    try:
+        token = token or st.secrets.get("HF_TOKEN")
+    except Exception:
+        # Local development can work without secrets when
+        # the local checkpoint is available.
+        pass
+
+    return token
+
+
 @st.cache_resource(show_spinner=False)
-def load_model():
-    """Load and cache the fine-tuned BLIP model."""
-    if not (MODEL_DIR / "config.json").is_file():
-        raise FileNotFoundError(
-            f"Fine-tuned model checkpoint not found: {MODEL_DIR}"
-        )
+def load_model(model_source: str, hf_token: str = ""):
+    """Load and cache the selected BLIP model."""
+
+    token = hf_token or None
 
     processor = BlipProcessor.from_pretrained(
-        str(MODEL_DIR),
+        model_source,
+        token=token,
         use_fast=False,
     )
 
     model = BlipForConditionalGeneration.from_pretrained(
-        str(MODEL_DIR)
+        model_source,
+        token=token,
+        use_safetensors=True,
     )
 
     device = torch.device(
@@ -51,25 +69,55 @@ def load_model():
     return processor, model, device
 
 
-def generate_caption(image, processor, model, device, max_tokens, num_beams):
-    """Generate a caption for a PIL image."""
+def get_model_source():
+    """Prefer a local checkpoint; otherwise use Hugging Face Hub."""
+
+    if (LOCAL_MODEL_DIR / "config.json").is_file():
+        return str(LOCAL_MODEL_DIR), None
+
+    token = get_hf_token()
+
+    if not token:
+        raise RuntimeError(
+            "The local model checkpoint is unavailable and the Hugging "
+            "Face repository is private. Add HF_TOKEN to Streamlit "
+            "secrets with read access to the model repository."
+        )
+
+    return HF_MODEL_ID, token
+
+
+def get_autocast(device):
+    """Select mixed precision when CUDA is available."""
+    if device.type != "cuda":
+        return nullcontext()
+
+    dtype = (
+        torch.bfloat16
+        if torch.cuda.is_bf16_supported()
+        else torch.float16
+    )
+
+    return torch.autocast(
+        device_type="cuda",
+        dtype=dtype,
+    )
+
+
+def generate_caption(
+    image,
+    processor,
+    model,
+    device,
+    max_tokens,
+    num_beams,
+):
+    """Generate a natural-language caption for an image."""
+
     inputs = processor(
         images=image,
         return_tensors="pt",
     ).to(device)
-
-    if device.type == "cuda":
-        amp_dtype = (
-            torch.bfloat16
-            if torch.cuda.is_bf16_supported()
-            else torch.float16
-        )
-        autocast = torch.autocast(
-            device_type="cuda",
-            dtype=amp_dtype,
-        )
-    else:
-        autocast = nullcontext()
 
     if device.type == "cuda":
         torch.cuda.synchronize()
@@ -77,7 +125,7 @@ def generate_caption(image, processor, model, device, max_tokens, num_beams):
     start = time.perf_counter()
 
     with torch.inference_mode():
-        with autocast:
+        with get_autocast(device):
             output_ids = model.generate(
                 **inputs,
                 max_new_tokens=max_tokens,
@@ -98,21 +146,19 @@ def generate_caption(image, processor, model, device, max_tokens, num_beams):
     return caption, elapsed
 
 
-# -------------------------
-# Sidebar
-# -------------------------
+# ==================================================
+# SIDEBAR
+# ==================================================
 
 with st.sidebar:
-    st.title("⚙️ Caption Settings")
-    st.caption("Configure the generation process.")
+    st.title("⚙️ Generation Settings")
 
     max_tokens = st.slider(
-        "Maximum new tokens",
+        "Maximum caption length",
         min_value=10,
         max_value=60,
         value=30,
         step=5,
-        help="Higher values allow longer captions.",
     )
 
     num_beams = st.slider(
@@ -120,7 +166,6 @@ with st.sidebar:
         min_value=1,
         max_value=5,
         value=3,
-        help="Higher values explore more candidate captions but can take longer.",
     )
 
     st.divider()
@@ -128,49 +173,61 @@ with st.sidebar:
     st.subheader("Model Information")
     st.write("**Architecture:** BLIP")
     st.write("**Framework:** PyTorch")
-    st.write("**Fine-tuning dataset:** Flickr30k")
-    st.write(
-        "**Device:** "
-        + ("CUDA GPU available" if torch.cuda.is_available() else "CPU")
-    )
+    st.write("**Training dataset:** Flickr30k")
+    st.write("**Fine-tuning:** 1 full epoch")
+    st.write("**Model:** Flickr30k fine-tuned BLIP")
+
+    st.divider()
 
     st.caption(
-        "This application uses the fine-tuned checkpoint stored "
-        "inside the V3 project."
+        "Version 3 is an independent PyTorch implementation "
+        "of the BLIP image-captioning pipeline."
     )
 
 
-# -------------------------
-# Main application
-# -------------------------
+# ==================================================
+# MAIN PAGE
+# ==================================================
 
 st.title("🖼️ Image Captioning V3")
+
 st.markdown(
-    "### Turn an image into a natural-language description"
+    "### Transform images into natural-language descriptions"
 )
+
 st.write(
-    "Upload a photograph, generate a caption using your fine-tuned "
-    "BLIP model, and download the result."
+    "Upload any photograph and let the Flickr30k fine-tuned "
+    "BLIP vision-language model generate its caption."
 )
 
 st.info(
-    "The model can describe a wide variety of images, but it may "
-    "occasionally miss details or generate inaccurate descriptions."
+    "The model can describe a wide variety of images, "
+    "including photographs outside its training dataset. "
+    "Generated captions may occasionally contain inaccuracies."
 )
 
 uploaded_file = st.file_uploader(
-    "Upload an image",
+    "Upload your image",
     type=["jpg", "jpeg", "png", "webp", "bmp"],
-    help="Supported formats: JPG, JPEG, PNG, WEBP and BMP.",
 )
 
 if uploaded_file is None:
-    st.markdown("#### Get started")
-    st.write(
-        "Choose an image above to see a preview and generate its caption."
+
+    st.markdown("### Get started")
+    st.write("Upload an image to generate its caption.")
+
+    st.markdown(
+        """
+        **Supported formats:** JPG, JPEG, PNG, WEBP, BMP
+
+        **Model:** BLIP fine-tuned on Flickr30k
+
+        **Inference:** Local GPU or cloud CPU
+        """
     )
 
 else:
+
     image_bytes = uploaded_file.getvalue()
     image_key = hashlib.sha256(image_bytes).hexdigest()
 
@@ -179,10 +236,7 @@ else:
             image = ImageOps.exif_transpose(source).convert("RGB")
 
     except (UnidentifiedImageError, OSError):
-        st.error(
-            "The uploaded file could not be read as a valid image. "
-            "Please try another file."
-        )
+        st.error("Unable to read this image. Please upload another.")
         st.stop()
 
     preview_col, result_col = st.columns(
@@ -191,31 +245,42 @@ else:
     )
 
     with preview_col:
+
         st.subheader("Uploaded Image")
+
         st.image(
             image,
             caption=uploaded_file.name,
-            use_container_width=True,
+            width="stretch",
         )
+
         st.caption(
-            f"Image dimensions: {image.width} × {image.height} pixels"
+            f"Dimensions: {image.width} × {image.height} pixels"
         )
 
     with result_col:
+
         st.subheader("Generated Caption")
 
         generate_button = st.button(
             "✨ Generate Caption",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
         if generate_button:
+
             try:
+                model_source, token = get_model_source()
+
                 with st.spinner(
-                    "Loading model and generating caption..."
+                    "Loading BLIP model and generating caption..."
                 ):
-                    processor, model, device = load_model()
+
+                    processor, model, device = load_model(
+                        model_source,
+                        token or "",
+                    )
 
                     caption, elapsed = generate_caption(
                         image=image,
@@ -231,7 +296,7 @@ else:
                     "caption": caption,
                     "elapsed": elapsed,
                     "device": str(device),
-                    "model": "Flickr30k fine-tuned BLIP",
+                    "model_source": model_source,
                 }
 
             except Exception as exc:
@@ -241,51 +306,76 @@ else:
         result = st.session_state.get("caption_result")
 
         if result and result["image_key"] == image_key:
+
             st.success("Caption generated successfully!")
+
             st.markdown("#### Caption")
+
             st.write(result["caption"])
 
-            metric_col1, metric_col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-            with metric_col1:
+            with col1:
                 st.metric(
                     "Inference time",
-                    f"{result['elapsed']:.3f} s",
+                    f"{result['elapsed']:.3f} seconds",
                 )
 
-            with metric_col2:
-                st.metric("Device", result["device"].upper())
+            with col2:
+                st.metric(
+                    "Device",
+                    result["device"].upper(),
+                )
 
             st.download_button(
                 "⬇️ Download Caption",
                 data=result["caption"],
                 file_name="generated_caption.txt",
                 mime="text/plain",
-                use_container_width=True,
+                width="stretch",
             )
 
             st.caption(
-                f"Model: {result['model']}"
+                f"Model source: {result['model_source']}"
             )
 
         else:
+
             st.caption(
-                "Your caption will appear here after you click "
-                "'Generate Caption'."
+                "Your generated caption will appear here."
             )
+
+
+# ==================================================
+# PROJECT INFORMATION
+# ==================================================
 
 st.divider()
 
-with st.expander("About this project"):
-    st.write(
-        "Version 3 uses a pretrained BLIP vision-language model "
-        "fine-tuned on Flickr30k image-caption pairs. It was built "
-        "as an independent PyTorch implementation with its own "
-        "dataset pipeline, training scripts, checkpoint and evaluation."
-    )
-    st.write(
-        "The model can generate captions for previously unseen images, "
-        "but successful generation does not guarantee perfect accuracy."
+with st.expander("About Image Captioning V3"):
+
+    st.markdown(
+        """
+        **Image Captioning V3** is an independent image-captioning
+        implementation built using PyTorch and BLIP.
+
+        **Technical details**
+
+        - Vision-language architecture: BLIP
+        - Model initialization: Pretrained BLIP base
+        - Fine-tuning dataset: Flickr30k
+        - Training: PyTorch with mixed precision
+        - Evaluation: BLEU, METEOR, ROUGE-L and CIDEr
+        - Interface: Streamlit
+
+        The model was fine-tuned using all 29,000 training images
+        in Flickr30k, with evaluation on its validation and
+        held-out test splits.
+
+        Fine-tuning improves agreement with Flickr30k reference
+        captions in our reported evaluation, but does not
+        guarantee perfect predictions for every image.
+        """
     )
 
-st.caption("Image Captioning V3 • PyTorch + BLIP + Streamlit")
+st.caption("Image Captioning V3 | PyTorch • BLIP • Flickr30k • Streamlit")
